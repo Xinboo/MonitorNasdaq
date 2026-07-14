@@ -25,7 +25,7 @@
 1. 克隆项目
 
 ```bash
-git clone https://github.com/yourname/MonitorNasdaq.git
+git clone https://github.com/Xinboo/MonitorNasdaq.git
 cd MonitorNasdaq/MonitorNasdaq
 ```
 
@@ -70,6 +70,27 @@ dotnet run -- --now
 | `Symbol` | Yahoo Finance 股票代码 | `^NDX` |
 | `ServerChanKey` | Server酱推送 Key | - |
 | `ReportHourBeijing` | 每日推送时间（北京时间，整点） | `9` |
+
+## Docker 部署
+
+```bash
+docker pull ghcr.io/xinboo/monitornasdaq:latest
+
+docker run -d \
+  -e Monitor__ServerChanKey=你的Server酱Key \
+  --name monitornasdaq \
+  --restart unless-stopped \
+  ghcr.io/xinboo/monitornasdaq:latest
+```
+
+也可以用 `--now` 参数立即测试：
+
+```bash
+docker run --rm \
+  -e Monitor__ServerChanKey=你的Server酱Key \
+  ghcr.io/xinboo/monitornasdaq:latest \
+  --now
+```
 
 ## 数据来源
 
