@@ -16,11 +16,23 @@ public class ChartData
 
 public class ChartResult
 {
+    [JsonPropertyName("meta")]
+    public ChartMeta? Meta { get; set; }
+
     [JsonPropertyName("timestamp")]
     public List<long>? Timestamp { get; set; }
 
     [JsonPropertyName("indicators")]
     public Indicators? Indicators { get; set; }
+}
+
+public class ChartMeta
+{
+    [JsonPropertyName("fiftyTwoWeekHigh")]
+    public double? FiftyTwoWeekHigh { get; set; }
+
+    [JsonPropertyName("fiftyTwoWeekLow")]
+    public double? FiftyTwoWeekLow { get; set; }
 }
 
 public class Indicators

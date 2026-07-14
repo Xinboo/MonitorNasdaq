@@ -25,7 +25,7 @@ public class MarketDataService
     public async Task<MarketReport?> GetDailyReportAsync(CancellationToken ct = default)
     {
         var symbol = Uri.EscapeDataString(_settings.Symbol);
-        var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=1y&interval=1d";
+        var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
 
         _logger.LogInformation("正在获取 {Symbol} 行情数据...", _settings.Symbol);
 
@@ -35,10 +35,13 @@ public class MarketDataService
         var json = await response.Content.ReadAsStringAsync(ct);
         var data = JsonSerializer.Deserialize<YahooFinanceResponse>(json);
 
-        var closes = data?.Chart?.Result?.FirstOrDefault()?.Indicators?.Quote?.FirstOrDefault()?.Close;
-        var timestamps = data?.Chart?.Result?.FirstOrDefault()?.Timestamp;
+        var result = data?.Chart?.Result?.FirstOrDefault();
+        var closes = result?.Indicators?.Quote?.FirstOrDefault()?.Close;
+        var timestamps = result?.Timestamp;
+        var week52High = result?.Meta?.FiftyTwoWeekHigh;
+        var week52Low = result?.Meta?.FiftyTwoWeekLow;
 
-        if (closes is null || timestamps is null || closes.Count < 2)
+        if (closes is null || timestamps is null || closes.Count < 2 || week52High is null || week52Low is null)
         {
             _logger.LogWarning("未获取到有效的行情数据");
             return null;
@@ -50,21 +53,27 @@ public class MarketDataService
 
         var todayClose = validCloses[^1];
         var yesterdayClose = validCloses[^2];
-        var week52High = validCloses.Max();
-        var dailyChange = (todayClose - yesterdayClose) / yesterdayClose * 100;
-        var fromHigh = (todayClose - week52High) / week52High * 100;
+        var dailyChangePoints = todayClose - yesterdayClose;
+        var dailyChange = dailyChangePoints / yesterdayClose * 100;
+        var fromHigh = (todayClose - week52High.Value) / week52High.Value * 100;
+        var fromLow = (todayClose - week52Low.Value) / week52Low.Value * 100;
 
         var lastTimestamp = timestamps[^1];
-        var tradeDate = DateTimeOffset.FromUnixTimeSeconds(lastTimestamp).UtcDateTime.Date;
+        var eastern = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+        var tradeDate = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTimeOffset.FromUnixTimeSeconds(lastTimestamp).UtcDateTime, eastern).Date;
 
         return new MarketReport
         {
             TradeDate = tradeDate,
             TodayClose = todayClose,
             YesterdayClose = yesterdayClose,
+            DailyChangePoints = dailyChangePoints,
             DailyChangePercent = dailyChange,
-            Week52High = week52High,
-            FromHighPercent = fromHigh
+            Week52High = week52High.Value,
+            Week52Low = week52Low.Value,
+            FromHighPercent = fromHigh,
+            FromLowPercent = fromLow
         };
     }
 }
@@ -74,7 +83,10 @@ public class MarketReport
     public DateTime TradeDate { get; set; }
     public double TodayClose { get; set; }
     public double YesterdayClose { get; set; }
+    public double DailyChangePoints { get; set; }
     public double DailyChangePercent { get; set; }
     public double Week52High { get; set; }
+    public double Week52Low { get; set; }
     public double FromHighPercent { get; set; }
+    public double FromLowPercent { get; set; }
 }

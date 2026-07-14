@@ -80,7 +80,7 @@ public class DailyReportService : BackgroundService
                     return;
                 }
 
-                var title = "纳指日报";
+                var title = "纳斯达克100指数";
                 var content = FormatReport(report);
 
                 _logger.LogInformation("简报内容:\n{Content}", content);
@@ -120,17 +120,22 @@ public class DailyReportService : BackgroundService
         return nextReportUtc - utcNow;
     }
 
+    private static readonly string[] WeekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
     private static string FormatReport(MarketReport report)
     {
-        var dailySign = report.DailyChangePercent >= 0 ? "+" : "";
+        var weekDay = WeekDays[(int)report.TradeDate.DayOfWeek];
+        var pointsSign = report.DailyChangePoints >= 0 ? "+" : "";
+        var pctSign = report.DailyChangePercent >= 0 ? "+" : "";
         var fromHighSign = report.FromHighPercent >= 0 ? "+" : "";
+        var fromLowSign = report.FromLowPercent >= 0 ? "+" : "";
 
         return
-            $"{report.TradeDate:yyyy-MM-dd}\n" +
-            $"当日收盘：{report.TodayClose:N2}\n" +
-            $"前日收盘：{report.YesterdayClose:N2}\n" +
-            $"当日涨跌：{dailySign}{report.DailyChangePercent:F2}%\n" +
-            $"52周最高：{report.Week52High:N2}\n" +
-            $"距52周高点：{fromHighSign}{report.FromHighPercent:F2}%";
+            $"# {report.TradeDate:yyyy-MM-dd}（{weekDay}）  \n" +
+            $"## 昨收：{report.YesterdayClose:N2}  \n" +
+            $"## 今收：{report.TodayClose:N2}  \n" +
+            $"## 变动：{pointsSign}{report.DailyChangePoints:N2}（{pctSign}{report.DailyChangePercent:F2}%）  \n" +
+            $"## 52周最高：{report.Week52High:N2}（{fromHighSign}{report.FromHighPercent:F2}%）  \n" +
+            $"## 52周最低：{report.Week52Low:N2}（{fromLowSign}{report.FromLowPercent:F2}%）";
     }
 }
