@@ -1,0 +1,13 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+
+## IDE
+.idea/
+.vscode/
+
+## 配置（含敏感信息）
+appsettings.json
