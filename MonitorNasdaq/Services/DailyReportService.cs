@@ -13,8 +13,19 @@ public class DailyReportService : BackgroundService
     private readonly ILogger<DailyReportService> _logger;
     private readonly bool _sendNow;
 
-    private static readonly TimeZoneInfo BeijingTimeZone =
-        TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+    private static readonly TimeZoneInfo BeijingTimeZone = GetBeijingTimeZone();
+
+    private static TimeZoneInfo GetBeijingTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        }
+    }
 
     public DailyReportService(
         MarketDataService marketData,

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using MonitorNasdaq.Configuration;
 using MonitorNasdaq.Models;
@@ -8,27 +9,44 @@ namespace MonitorNasdaq.Services;
 
 public class MarketDataService
 {
-    private readonly HttpClient _httpClient;
     private readonly MonitorSettings _settings;
     private readonly ILogger<MarketDataService> _logger;
+    private readonly HttpClient _httpClient;
 
     public MarketDataService(HttpClient httpClient, IOptions<MonitorSettings> settings, ILogger<MarketDataService> logger)
     {
-        _httpClient = httpClient;
         _settings = settings.Value;
         _logger = logger;
 
+        var handler = new HttpClientHandler
+        {
+            CookieContainer = new CookieContainer(),
+            UseCookies = true
+        };
+        _httpClient = new HttpClient(handler);
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        _httpClient.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        _httpClient.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.5");
     }
 
     public async Task<MarketReport?> GetDailyReportAsync(CancellationToken ct = default)
     {
         var symbol = Uri.EscapeDataString(_settings.Symbol);
-        var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
 
         _logger.LogInformation("正在获取 {Symbol} 行情数据...", _settings.Symbol);
 
+        // 先访问 Yahoo Finance 页面获取 Cookie
+        try
+        {
+            await _httpClient.GetAsync("https://finance.yahoo.com/", ct);
+        }
+        catch
+        {
+            // Cookie 获取失败不影响后续尝试
+        }
+
+        var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
         var response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
@@ -59,7 +77,7 @@ public class MarketDataService
         var fromLow = (todayClose - week52Low.Value) / week52Low.Value * 100;
 
         var lastTimestamp = timestamps[^1];
-        var eastern = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+        var eastern = GetEasternTimeZone();
         var tradeDate = TimeZoneInfo.ConvertTimeFromUtc(
             DateTimeOffset.FromUnixTimeSeconds(lastTimestamp).UtcDateTime, eastern).Date;
 
@@ -75,6 +93,18 @@ public class MarketDataService
             FromHighPercent = fromHigh,
             FromLowPercent = fromLow
         };
+    }
+
+    private static TimeZoneInfo GetEasternTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        }
     }
 }
 
