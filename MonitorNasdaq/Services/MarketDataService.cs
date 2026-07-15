@@ -11,6 +11,7 @@ public class MarketDataService
     private readonly HttpClient _httpClient;
     private readonly MonitorSettings _settings;
     private readonly ILogger<MarketDataService> _logger;
+    private string? _crumb;
 
     public MarketDataService(HttpClient httpClient, IOptions<MonitorSettings> settings, ILogger<MarketDataService> logger)
     {
@@ -20,13 +21,15 @@ public class MarketDataService
 
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        _httpClient.DefaultRequestHeaders.Add("Cookie", "GUC=AQEBAgFn; A3=d=AQABBBhQ");
     }
 
     public async Task<MarketReport?> GetDailyReportAsync(CancellationToken ct = default)
     {
+        await EnsureCrumbAsync(ct);
+
         var symbol = Uri.EscapeDataString(_settings.Symbol);
-        var url = $"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
+        var crumbParam = _crumb != null ? $"&crumb={Uri.EscapeDataString(_crumb)}" : "";
+        var url = $"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d{crumbParam}";
 
         _logger.LogInformation("正在获取 {Symbol} 行情数据...", _settings.Symbol);
 
@@ -76,6 +79,30 @@ public class MarketDataService
             FromHighPercent = fromHigh,
             FromLowPercent = fromLow
         };
+    }
+
+    private async Task EnsureCrumbAsync(CancellationToken ct)
+    {
+        if (_crumb != null)
+            return;
+
+        _logger.LogInformation("正在获取 Yahoo Finance 认证信息...");
+
+        try
+        {
+            await _httpClient.GetAsync("https://fc.yahoo.com", ct);
+        }
+        catch
+        {
+            // fc.yahoo.com 会返回 404，但会设置 Cookie
+        }
+
+        var crumbResponse = await _httpClient.GetAsync(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb", ct);
+        crumbResponse.EnsureSuccessStatusCode();
+        _crumb = await crumbResponse.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation("Yahoo Finance 认证成功");
     }
 
     private static TimeZoneInfo GetEasternTimeZone()
