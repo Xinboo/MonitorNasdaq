@@ -9,12 +9,7 @@ if (args.Contains("--now"))
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.Configure<MonitorSettings>(builder.Configuration.GetSection("Monitor"));
-builder.Services.AddHttpClient<MarketDataService>()
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-    {
-        UseCookies = true,
-        CookieContainer = new System.Net.CookieContainer()
-    });
+builder.Services.AddHttpClient<MarketDataService>();
 builder.Services.AddHttpClient<NotificationService>();
 builder.Services.AddHostedService<DailyReportService>();
 

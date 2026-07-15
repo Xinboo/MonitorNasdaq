@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MonitorNasdaq.Configuration;
 using MonitorNasdaq.Models;
@@ -11,7 +12,6 @@ public class MarketDataService
     private readonly HttpClient _httpClient;
     private readonly MonitorSettings _settings;
     private readonly ILogger<MarketDataService> _logger;
-    private string? _crumb;
 
     public MarketDataService(HttpClient httpClient, IOptions<MonitorSettings> settings, ILogger<MarketDataService> logger)
     {
@@ -21,51 +21,70 @@ public class MarketDataService
 
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+        _httpClient.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
     }
 
     public async Task<MarketReport?> GetDailyReportAsync(CancellationToken ct = default)
     {
-        await EnsureCrumbAsync(ct);
+        _logger.LogInformation("正在从 Nasdaq 官方 API 获取 {Symbol} 行情数据...", _settings.Symbol);
 
-        var symbol = Uri.EscapeDataString(_settings.Symbol);
-        var crumbParam = _crumb != null ? $"&crumb={Uri.EscapeDataString(_crumb)}" : "";
-        var url = $"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d{crumbParam}";
+        var infoUrl = $"https://api.nasdaq.com/api/quote/{_settings.Symbol}/info?assetclass=index";
+        var infoResponse = await _httpClient.GetAsync(infoUrl, ct);
+        infoResponse.EnsureSuccessStatusCode();
+        var infoJson = await infoResponse.Content.ReadAsStringAsync(ct);
+        var info = JsonSerializer.Deserialize<NasdaqInfoResponse>(infoJson);
 
-        _logger.LogInformation("正在获取 {Symbol} 行情数据...", _settings.Symbol);
-
-        var response = await _httpClient.GetAsync(url, ct);
-        response.EnsureSuccessStatusCode();
-
-        var json = await response.Content.ReadAsStringAsync(ct);
-        var data = JsonSerializer.Deserialize<YahooFinanceResponse>(json);
-
-        var result = data?.Chart?.Result?.FirstOrDefault();
-        var closes = result?.Indicators?.Quote?.FirstOrDefault()?.Close;
-        var timestamps = result?.Timestamp;
-        var week52High = result?.Meta?.FiftyTwoWeekHigh;
-        var week52Low = result?.Meta?.FiftyTwoWeekLow;
-
-        if (closes is null || timestamps is null || closes.Count < 2 || week52High is null || week52Low is null)
+        var primaryData = info?.Data?.PrimaryData;
+        var keyStats = info?.Data?.KeyStats;
+        if (primaryData?.LastSalePrice is null || keyStats?.PreviousClose?.Value is null)
         {
             _logger.LogWarning("未获取到有效的行情数据");
             return null;
         }
 
-        var validCloses = closes.Where(c => c.HasValue).Select(c => c!.Value).ToList();
-        if (validCloses.Count < 2)
+        var todayClose = ParseNumber(primaryData.LastSalePrice);
+        var yesterdayClose = ParseNumber(keyStats.PreviousClose.Value);
+        if (todayClose == 0 || yesterdayClose == 0)
+        {
+            _logger.LogWarning("解析价格数据失败");
             return null;
+        }
 
-        var todayClose = validCloses[^1];
-        var yesterdayClose = validCloses[^2];
+        var eastern = GetEasternTimeZone();
+        var tradeDate = DateTime.Now;
+        if (primaryData.LastTradeTimestamp != null)
+        {
+            if (DateTime.TryParseExact(primaryData.LastTradeTimestamp, "MMM d, yyyy",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                tradeDate = parsed;
+        }
+
+        var oneYearAgo = tradeDate.AddYears(-1);
+        var chartUrl = $"https://api.nasdaq.com/api/quote/{_settings.Symbol}/chart?assetclass=index" +
+                       $"&fromdate={oneYearAgo:yyyy-MM-dd}&todate={tradeDate:yyyy-MM-dd}";
+        var chartResponse = await _httpClient.GetAsync(chartUrl, ct);
+        chartResponse.EnsureSuccessStatusCode();
+        var chartJson = await chartResponse.Content.ReadAsStringAsync(ct);
+        var chart = JsonSerializer.Deserialize<NasdaqChartResponse>(chartJson);
+
+        var points = chart?.Data?.Chart;
+        if (points is null || points.Count == 0)
+        {
+            _logger.LogWarning("未获取到历史数据，无法计算52周最高/最低");
+            return null;
+        }
+
+        var week52High = points.Max(p => p.Y);
+        var week52Low = points.Min(p => p.Y);
+
         var dailyChangePoints = todayClose - yesterdayClose;
         var dailyChange = dailyChangePoints / yesterdayClose * 100;
-        var fromHigh = (todayClose - week52High.Value) / week52High.Value * 100;
-        var fromLow = (todayClose - week52Low.Value) / week52Low.Value * 100;
+        var fromHigh = (todayClose - week52High) / week52High * 100;
+        var fromLow = (todayClose - week52Low) / week52Low * 100;
 
-        var lastTimestamp = timestamps[^1];
-        var eastern = GetEasternTimeZone();
-        var tradeDate = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTimeOffset.FromUnixTimeSeconds(lastTimestamp).UtcDateTime, eastern).Date;
+        _logger.LogInformation("数据获取成功: 收盘 {Close}, 52周高 {High}, 52周低 {Low}",
+            todayClose.ToString("F2"), week52High.ToString("F2"), week52Low.ToString("F2"));
 
         return new MarketReport
         {
@@ -74,35 +93,17 @@ public class MarketDataService
             YesterdayClose = yesterdayClose,
             DailyChangePoints = dailyChangePoints,
             DailyChangePercent = dailyChange,
-            Week52High = week52High.Value,
-            Week52Low = week52Low.Value,
+            Week52High = week52High,
+            Week52Low = week52Low,
             FromHighPercent = fromHigh,
             FromLowPercent = fromLow
         };
     }
 
-    private async Task EnsureCrumbAsync(CancellationToken ct)
+    private static double ParseNumber(string value)
     {
-        if (_crumb != null)
-            return;
-
-        _logger.LogInformation("正在获取 Yahoo Finance 认证信息...");
-
-        try
-        {
-            await _httpClient.GetAsync("https://fc.yahoo.com", ct);
-        }
-        catch
-        {
-            // fc.yahoo.com 会返回 404，但会设置 Cookie
-        }
-
-        var crumbResponse = await _httpClient.GetAsync(
-            "https://query2.finance.yahoo.com/v1/test/getcrumb", ct);
-        crumbResponse.EnsureSuccessStatusCode();
-        _crumb = await crumbResponse.Content.ReadAsStringAsync(ct);
-
-        _logger.LogInformation("Yahoo Finance 认证成功");
+        var cleaned = value.Replace(",", "").Replace("+", "").Replace("%", "").Trim();
+        return double.TryParse(cleaned, CultureInfo.InvariantCulture, out var result) ? result : 0;
     }
 
     private static TimeZoneInfo GetEasternTimeZone()
