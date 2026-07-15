@@ -44,20 +44,29 @@ public class NasdaqStatItem
     public string? Value { get; set; }
 }
 
-public class NasdaqChartResponse
+public class NasdaqHistoricalResponse
 {
     [JsonPropertyName("data")]
-    public NasdaqChartData? Data { get; set; }
+    public NasdaqHistoricalData? Data { get; set; }
 }
 
-public class NasdaqChartData
+public class NasdaqHistoricalData
 {
-    [JsonPropertyName("chart")]
-    public List<NasdaqChartPoint>? Chart { get; set; }
+    [JsonPropertyName("tradesTable")]
+    public NasdaqTradesTable? TradesTable { get; set; }
 }
 
-public class NasdaqChartPoint
+public class NasdaqTradesTable
 {
-    [JsonPropertyName("y")]
-    public double Y { get; set; }
+    [JsonPropertyName("rows")]
+    public List<NasdaqTradeRow>? Rows { get; set; }
+}
+
+public class NasdaqTradeRow
+{
+    [JsonPropertyName("high")]
+    public string? High { get; set; }
+
+    [JsonPropertyName("low")]
+    public string? Low { get; set; }
 }

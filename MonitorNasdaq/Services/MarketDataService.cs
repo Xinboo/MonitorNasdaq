@@ -61,22 +61,30 @@ public class MarketDataService
         }
 
         var oneYearAgo = tradeDate.AddYears(-1);
-        var chartUrl = $"https://api.nasdaq.com/api/quote/{_settings.Symbol}/chart?assetclass=index" +
-                       $"&fromdate={oneYearAgo:yyyy-MM-dd}&todate={tradeDate:yyyy-MM-dd}";
-        var chartResponse = await _httpClient.GetAsync(chartUrl, ct);
-        chartResponse.EnsureSuccessStatusCode();
-        var chartJson = await chartResponse.Content.ReadAsStringAsync(ct);
-        var chart = JsonSerializer.Deserialize<NasdaqChartResponse>(chartJson);
+        var histUrl = $"https://api.nasdaq.com/api/quote/{_settings.Symbol}/historical?assetclass=index" +
+                      $"&fromdate={oneYearAgo:yyyy-MM-dd}&todate={tradeDate:yyyy-MM-dd}&limit=300";
+        var histResponse = await _httpClient.GetAsync(histUrl, ct);
+        histResponse.EnsureSuccessStatusCode();
+        var histJson = await histResponse.Content.ReadAsStringAsync(ct);
+        var hist = JsonSerializer.Deserialize<NasdaqHistoricalResponse>(histJson);
 
-        var points = chart?.Data?.Chart;
-        if (points is null || points.Count == 0)
+        var rows = hist?.Data?.TradesTable?.Rows;
+        if (rows is null || rows.Count == 0)
         {
             _logger.LogWarning("未获取到历史数据，无法计算52周最高/最低");
             return null;
         }
 
-        var week52High = points.Max(p => p.Y);
-        var week52Low = points.Min(p => p.Y);
+        var highs = rows.Select(r => ParseNumber(r.High ?? "0")).Where(v => v > 0).ToList();
+        var lows = rows.Select(r => ParseNumber(r.Low ?? "0")).Where(v => v > 0).ToList();
+        if (highs.Count == 0 || lows.Count == 0)
+        {
+            _logger.LogWarning("历史数据解析失败");
+            return null;
+        }
+
+        var week52High = highs.Max();
+        var week52Low = lows.Min();
 
         var dailyChangePoints = todayClose - yesterdayClose;
         var dailyChange = dailyChangePoints / yesterdayClose * 100;
