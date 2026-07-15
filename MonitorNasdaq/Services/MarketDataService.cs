@@ -39,14 +39,14 @@ public class MarketDataService
         // 先访问 Yahoo Finance 页面获取 Cookie
         try
         {
-            await _httpClient.GetAsync("https://finance.yahoo.com/", ct);
+            await _httpClient.GetAsync("https://fc.yahoo.com", ct);
         }
         catch
         {
             // Cookie 获取失败不影响后续尝试
         }
 
-        var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
+        var url = $"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d";
         var response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
