@@ -3,5 +3,6 @@ services:
     image: ghcr.io/xinboo/monitornasdaq:latest
     container_name: monitornasdaq
     environment:
-      - Monitor__ServerChanKey=你的Server酱Key
+      - Monitor__ServerChanKeys__0=你的Server酱Key
+      - Monitor__ServerChanKeys__1=朋友的Server酱Key
     restart: unless-stopped
