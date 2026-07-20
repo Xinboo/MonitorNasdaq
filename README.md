@@ -5,14 +5,14 @@
 ## 推送内容
 
 ```
-纳指日报
+纳斯达克100指数
 
-2026-07-13
-当日收盘：29,264.10
-前日收盘：29,825.11
-当日涨跌：-1.88%
-52周最高：30,660.60
-距52周高点：-4.55%
+# 2026-07-16（周四）
+## 昨收：29,502.60
+## 今收：29,025.77
+## 变动：-476.83（-1.62%）
+## 52周最高：30,762.20（-5.64%）
+## 52周最低：22,669.37（+28.04%）
 ```
 
 ## 环境要求
@@ -40,7 +40,7 @@ cp appsettings.Example.json appsettings.json
 ```json
 {
   "Monitor": {
-    "Symbol": "^NDX",
+    "Symbol": "NDX",
     "ServerChanKey": "你的Server酱Key",
     "ReportHourBeijing": 9
   }
@@ -67,7 +67,7 @@ dotnet run -- --now
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `Symbol` | Yahoo Finance 股票代码 | `^NDX` |
+| `Symbol` | Nasdaq 指数代码 | `NDX` |
 | `ServerChanKey` | Server酱推送 Key | - |
 | `ReportHourBeijing` | 每日推送时间（北京时间，整点） | `9` |
 
@@ -106,7 +106,7 @@ docker run --rm \
 
 ## 数据来源
 
-行情数据来自 Yahoo Finance，无需 API Key。
+行情数据来自 [Nasdaq 官方 API](https://api.nasdaq.com)，无需 API Key。52 周最高/最低使用日内最高价和最低价计算。
 
 ## License
 

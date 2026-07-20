@@ -19,17 +19,29 @@ public class NotificationService
 
     public async Task SendAsync(string title, string content, CancellationToken ct = default)
     {
+        var keys = _settings.ServerChanKeys.Where(k => !string.IsNullOrEmpty(k)).ToList();
+
+        if (keys.Count == 0)
+        {
+            _logger.LogWarning("未配置 Server酱 Key，跳过推送");
+            return;
+        }
+
         var encodedTitle = Uri.EscapeDataString(title);
         var encodedContent = Uri.EscapeDataString(content);
-        var url = $"https://sctapi.ftqq.com/{_settings.ServerChanKey}.send?title={encodedTitle}&desp={encodedContent}";
 
-        _logger.LogInformation("正在发送通知: {Title}", title);
+        foreach (var key in keys)
+        {
+            var url = $"https://sctapi.ftqq.com/{key}.send?title={encodedTitle}&desp={encodedContent}";
 
-        var response = await _httpClient.GetAsync(url, ct);
+            _logger.LogInformation("正在发送通知: {Title} -> {Key}", title, key[..8] + "***");
 
-        if (response.IsSuccessStatusCode)
-            _logger.LogInformation("通知发送成功");
-        else
-            _logger.LogWarning("通知发送失败, 状态码: {StatusCode}", response.StatusCode);
+            var response = await _httpClient.GetAsync(url, ct);
+
+            if (response.IsSuccessStatusCode)
+                _logger.LogInformation("通知发送成功 -> {Key}", key[..8] + "***");
+            else
+                _logger.LogWarning("通知发送失败 -> {Key}, 状态码: {StatusCode}", key[..8] + "***", response.StatusCode);
+        }
     }
 }
