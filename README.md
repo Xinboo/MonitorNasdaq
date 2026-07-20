@@ -18,7 +18,7 @@
 ## 环境要求
 
 - .NET 8 SDK
-- [Server酱](https://sct.ftqq.com/) 账号（用于微信推送）
+- [Server酱](https://sct.ftqq.com/) 账号（用于微信推送，支持多个）
 
 ## 快速开始
 
@@ -31,7 +31,7 @@ cd MonitorNasdaq/MonitorNasdaq
 
 2. 配置
 
-将 `appsettings.Example.json` 复制为 `appsettings.json`，填入你的 Server酱 Key：
+将 `appsettings.Example.json` 复制为 `appsettings.json`，填入 Server酱 Key：
 
 ```bash
 cp appsettings.Example.json appsettings.json
@@ -41,7 +41,10 @@ cp appsettings.Example.json appsettings.json
 {
   "Monitor": {
     "Symbol": "NDX",
-    "ServerChanKey": "你的Server酱Key",
+    "ServerChanKeys": [
+      "你的Server酱Key",
+      "朋友的Server酱Key"
+    ],
     "ReportHourBeijing": 9
   }
 }
@@ -68,7 +71,7 @@ dotnet run -- --now
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `Symbol` | Nasdaq 指数代码 | `NDX` |
-| `ServerChanKey` | Server酱推送 Key | - |
+| `ServerChanKeys` | Server酱推送 Key 列表，支持多个同时推送 | `[]` |
 | `ReportHourBeijing` | 每日推送时间（北京时间，整点） | `9` |
 
 ## Docker 部署
@@ -77,7 +80,8 @@ dotnet run -- --now
 docker pull ghcr.io/xinboo/monitornasdaq:latest
 
 docker run -d \
-  -e Monitor__ServerChanKey=你的Server酱Key \
+  -e Monitor__ServerChanKeys__0=你的Server酱Key \
+  -e Monitor__ServerChanKeys__1=朋友的Server酱Key \
   --name monitornasdaq \
   --restart unless-stopped \
   ghcr.io/xinboo/monitornasdaq:latest
@@ -87,7 +91,7 @@ docker run -d \
 
 ```bash
 docker run --rm \
-  -e Monitor__ServerChanKey=你的Server酱Key \
+  -e Monitor__ServerChanKeys__0=你的Server酱Key \
   ghcr.io/xinboo/monitornasdaq:latest \
   --now
 ```
